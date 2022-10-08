@@ -14,29 +14,29 @@ def parse_agrs():
     parser = argparse.ArgumentParser()
 
     # Data input settings
-    parser.add_argument('--image_dir', type=str, default='/data/home/scv3892/run/R2Gen-main/data/mimic_cxr/images', help='the path to the directory containing the data.')
-    parser.add_argument('--ann_path', type=str, default='/data/home/scv3892/run/R2Gen-main/data/mimic_cxr/annotation.json', help='the path to the directory containing the data.')
+    parser.add_argument('--image_dir', type=str, default='/iu_xray/images', help='the path to the directory containing the data.')
+    parser.add_argument('--ann_path', type=str, default='/iu_xray/annotation.json', help='the path to the directory containing the data.')
 
     # Data loader settings
-    parser.add_argument('--dataset_name', type=str, default='mimic_cxr', choices=['iu_xray', 'mimic_cxr'], help='the dataset to be used.')
-    parser.add_argument('--max_seq_length', type=int, default=100, help='the maximum sequence length of the reports.')
-    parser.add_argument('--threshold', type=int, default=10, help='the cut off frequency for the words.')
+    parser.add_argument('--dataset_name', type=str, default='iu_xray', choices=['iu_xray', 'mimic_cxr'], help='the dataset to be used.')
+    parser.add_argument('--max_seq_length', type=int, default=60, help='the maximum sequence length of the reports.')
+    parser.add_argument('--threshold', type=int, default=3, help='the cut off frequency for the words.')
     parser.add_argument('--num_workers', type=int, default=2, help='the number of workers for dataloader.')
-    parser.add_argument('--batch_size', type=int, default=64, help='the number of samples for a batch')
+    parser.add_argument('--batch_size', type=int, default=2, help='the number of samples for a batch')
 
     # Model settings (for visual extractor)
-    parser.add_argument('--visual_extractor', type=str, default='resnet152', help='the visual extractor to be used.')
+    parser.add_argument('--visual_extractor', type=str, default='resnet101', help='the visual extractor to be used.')
     parser.add_argument('--visual_extractor_pretrained', type=bool, default=True, help='whether to load the pretrained visual extractor')
 
     # Model settings (for Transformer)
-    parser.add_argument('--d_model', type=int, default=512, help='the dimension of Transformer.')
+    parser.add_argument('--d_model', type=int, default=1536, help='the dimension of Transformer.')
     parser.add_argument('--d_ff', type=int, default=512, help='the dimension of FFN.')
     parser.add_argument('--d_vf', type=int, default=2048, help='the dimension of the patch features.')
     # parser.add_argument('--num_heads', type=int, default=8, help='the number of heads in Transformer.')
     parser.add_argument('--num_heads', type=int, default=8, help='the number of heads in Transformer.')
     # parser.add_argument('--num_layers', type=int, default=3, help='the number of layers of Transformer.')
     parser.add_argument('--num_layers', type=int, default=3, help='the number of layers of Transformer.')
-    parser.add_argument('--dropout', type=float, default=0.3, help='the dropout rate of Transformer.')
+    parser.add_argument('--dropout', type=float, default=0.1, help='the dropout rate of Transformer.')
     parser.add_argument('--logit_layers', type=int, default=1, help='the number of the logit layer.')
     parser.add_argument('--bos_idx', type=int, default=0, help='the index of <bos>.')
     parser.add_argument('--eos_idx', type=int, default=0, help='the index of <eos>.')
@@ -63,7 +63,7 @@ def parse_agrs():
     # Trainer settings
     parser.add_argument('--n_gpu', type=int, default=1, help='the number of gpus to be used.')
     parser.add_argument('--epochs', type=int, default=30, help='the number of training epochs.')
-    parser.add_argument('--save_dir', type=str, default='results/mimic_cxr', help='the patch to save the models.')
+    parser.add_argument('--save_dir', type=str, default='results/iu_xray', help='the patch to save the models.')
     parser.add_argument('--record_dir', type=str, default='records/', help='the patch to save the results of experiments')
     parser.add_argument('--save_period', type=int, default=1, help='the saving period.')
     parser.add_argument('--monitor_mode', type=str, default='max', choices=['min', 'max'], help='whether to max or min the metric.')
@@ -72,18 +72,18 @@ def parse_agrs():
 
     # Optimization
     parser.add_argument('--optim', type=str, default='Adam', help='the type of the optimizer.')
-    parser.add_argument('--lr_ve', type=float, default=6e-9, help='the learning rate for the visual extractor.')
-    parser.add_argument('--lr_ed', type=float, default=1e-5, help='the learning rate for the remaining parameters.')
-    parser.add_argument('--weight_decay', type=float, default=0.0008, help='the weight decay.')
+    parser.add_argument('--lr_ve', type=float, default=5e-5, help='the learning rate for the visual extractor.')
+    parser.add_argument('--lr_ed', type=float, default=0.0001, help='the learning rate for the remaining parameters.')
+    parser.add_argument('--weight_decay', type=float, default=0.0001, help='the weight decay.')
     parser.add_argument('--amsgrad', type=bool, default=True, help='.')
 
     # Learning Rate Scheduler
     parser.add_argument('--lr_scheduler', type=str, default='StepLR', help='the type of the learning rate scheduler.')
-    parser.add_argument('--step_size', type=int, default=1, help='the step size of the learning rate scheduler.')
-    parser.add_argument('--gamma', type=float, default=0.8, help='the gamma of the learning rate scheduler.')
+    parser.add_argument('--step_size', type=int, default=50, help='the step size of the learning rate scheduler.')
+    parser.add_argument('--gamma', type=float, default=0.1, help='the gamma of the learning rate scheduler.')
 
     # Others
-    parser.add_argument('--seed', type=int, default=456789, help='.')
+    parser.add_argument('--seed', type=int, default=9233, help='.')
     parser.add_argument('--resume', type=str, help='whether to resume the training from existing checkpoints.')
 
     args = parser.parse_args()
@@ -93,7 +93,6 @@ def parse_agrs():
 def main():
     # parse arguments
     args = parse_agrs()
-    print(args)
     # fix random seeds
     torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = True
@@ -111,12 +110,9 @@ def main():
 
     # build model architecture
     model = R2GenModel(args, tokenizer)
-    #model = torch.load('results/iu_xray/model_best.pth', map_location='cpu')
-    # get function handles of loss and metrics
     criterion = compute_loss
     metrics = compute_scores
-    # 打印G和D的总参数数量
-    print("Total number of param in Generator is ", sum(x.numel() for x in model.parameters()))
+
 
 
     # build optimizer, learning rate scheduler
