@@ -52,7 +52,7 @@ class R2DataLoader(DataLoader):
 
         targets = np.zeros((len(reports_ids), max_seq_length), dtype=int)
         targets_masks = np.zeros((len(reports_ids), max_seq_length), dtype=int)
-        top_Id = np.zeros((len(top_tensor), 49), dtype=int)
+        top_Id = np.zeros((len(top_tensor), 98), dtype=int)
         for i, report_ids in enumerate(reports_ids):
             targets[i, :len(report_ids)] = report_ids
 

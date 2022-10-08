@@ -15,7 +15,6 @@ class BaseDataset(Dataset):
         self.transform = transform
         self.ann = json.loads(open(self.ann_path, 'r').read())
         self.top_them = 'normal, cardiomegaly, scoliosis, fractures, effusion, thickening, pneumothorax, hernia, calcinosis, emphysema, pneumonia, edema, atelectasis, cicatrix, opacity, lesion, airspace disease, hypoinflation, medical device, other'
-        #self.top_them = 'pleural, normal, lungs, pneumothorax, heart, effusion, pulmonary, thoracic, disease, vasculature, chest, hilar, aorta, Cardiac, pneumothoraces, rib, edema, osseous, skeletal, XXXX, costophrenic'
         self.examples = self.ann[self.split]
         for i in range(len(self.examples)):
             self.examples[i]['ids'] = tokenizer(self.examples[i]['report'])[:self.max_seq_length]

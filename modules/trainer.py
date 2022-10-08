@@ -5,7 +5,8 @@ import time
 import torch
 import pandas as pd
 from numpy import inf
-
+import matplotlib.pyplot as plt
+import cv2
 
 class BaseTrainer(object):
     def __init__(self, model, criterion, metric_ftns, optimizer, args):
@@ -189,9 +190,8 @@ class Trainer(BaseTrainer):
         train_loss = 0
         self.model.train()
         for batch_idx, (images_id, images, reports_ids, reports_masks, top_id) in enumerate(self.train_dataloader):
-            images, reports_ids, reports_masks, top_id  = images.to(self.device), reports_ids.to(self.device), reports_masks.to(
+            images, reports_ids, reports_masks, top_id = images.to(self.device), reports_ids.to(self.device), reports_masks.to(
                 self.device), top_id.to(self.device)
-
             output = self.model(images, reports_ids, top_id, mode='train')
             loss = self.criterion(output, reports_ids, reports_masks)
             train_loss += loss.item()

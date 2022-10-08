@@ -10,9 +10,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from modules.attention import MultiHeadedAttention
-from .att_model import pack_wrapper, AttModel
+from modules.att_model import pack_wrapper, AttModel
 from pytorch_transformers import BertModel, BertConfig, BertTokenizer
-
+import matplotlib.pyplot as plt
+import cv2
 def clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for _ in range(N)])
 
@@ -40,6 +41,7 @@ def add_norm(x):
 class Transformer(nn.Module):
     def __init__(self, encoder, decoder, src_embed, tgt_embed, rm, attn, ff):
         super(Transformer, self).__init__()
+        self.d_model = 1536
         self.encoder = encoder
         self.decoder = decoder
         self.src_embed = src_embed
@@ -47,9 +49,11 @@ class Transformer(nn.Module):
         self.rm = rm
         self.attn = attn
         self.ff = ff
-        self.encoder_ = encoder
-
-
+        self.ln = LayerNorm(1536)
+        self.mlp = nn.Sequential(nn.Linear(self.d_model, self.d_model),
+                             nn.ReLU(),
+                             nn.Linear(self.d_model, self.d_model),
+                             nn.ReLU())
 
     def forward(self, src, top_id, tgt, src_mask, tgt_mask):
         Flag = True
@@ -68,24 +72,7 @@ class Transformer(nn.Module):
             else:
                 return self.encoder(self.src_embed(src), src_id, src_mask, Flag)
     def decode(self, hidden_states, src_mask, tgt, tgt_mask):
-
-
-        # memory = self.rm.init_memory(hidden_states.size(0)).to(hidden_states)
-        #
-        # #memory = self.rm(self.tgt_embed(tgt), memory)  原来的
-        #
-        # tgt_embed = self.tgt_embed(tgt)
-        emb = 5
         memory = self.rm(self.tgt_embed(tgt))
-
-        #memory = self.bert(tgt)
-        #temp_memory = self.rm(memory)
-        #temp_memory = self.rm(self.tgt_embed(tgt))
-        #temp_memory = self.    rm(self.tgt_embed(tgt), tgt, memory)
-
-
-
-        #temp_memory = torch.randn(2,34,512)
         return self.decoder(self.tgt_embed(tgt), hidden_states, src_mask, tgt_mask, memory)
 
 
@@ -209,7 +196,6 @@ class ConditionalLayerNorm(nn.Module):
                 nn.init.constant_(m.bias, 0.1)
 
     def forward(self, x, memory):
-        #   memory 是图片增强了文字之后的文字的特征  == 当前文字特征得到了加强
         mean = x.mean(-1, keepdim=True)
         std = x.std(-1, keepdim=True)
         delta_gamma = self.mlp_gamma(memory)
@@ -240,8 +226,6 @@ class MultiHeadedAttention(nn.Module):
         if mask is not None:
             mask = mask.unsqueeze(1)
         nbatches = query.size(0)
-
-
         query, key, value = \
             [l(x).view(nbatches, -1, self.h, self.d_k).transpose(1, 2) for l, x in zip(self.linears, (query, key, value))]
 
@@ -389,31 +373,14 @@ class GRUModelSA(nn.Module):
         self.review_att = SelfAttention(self.review_hidden_size, self.da, self.r)
         self.mhat = MultiHeadedAttention(8, 1536)
     def forward(self, x):
-        """
-        :param x: [batch, review_num, review_len, embedding_size]
-        :return:
-        """
-        # batch = x.size(0)
-        # review_num = x.size(1)
+
         review_len = x.size(1)
         embedding_size = x.size(2)
 
-        # [batch*review_num, review_len, embedding_size]
         x = x.view(-1, review_len, embedding_size)
-
-        # output: [batch*review_num, review_len, review_hidden_size]
-        # hn: [ndirections*num_layers, batch*review_num, hidden_layers]
         output, hn = self.gru(x)
-
-        review_embedding = output # [batch*review_num, review_len, review_hidden_size]
         att = self.mhat(output,output,output)
-        # attention = self.review_att(review_embedding) # [batch*review_num, r, review_len]
-        # review_embedding = attention.mul(review_embedding)  # [batch*review_num, r, review_hidden_size]
-        # review_embedding = torch.sum(review_embedding, 1) / self.r  # [batch*review_num, review_hidden_size]
-        # review_embedding = review_embedding.view(batch, review_num, self.review_hidden_size) # [batch, review_num, review_hidden_size]
 
-        # att = torch.mean(attention, 1) # [batch*review_num, review_len]
-        # att = att.view(batch, review_num, review_len) # [batch, review_num, review_len]
 
         return att
 class RelationalMemory(nn.Module):
@@ -522,20 +489,14 @@ class EncoderDecoder(AttModel):
         attn = MultiHeadedAttention(self.num_heads, self.d_model)
         ff = PositionwiseFeedForward(self.d_model, self.d_ff, self.dropout)
         position = PositionalEncoding(self.d_model, self.dropout)
-        #rm = RelationalMemory(num_slots=self.rm_num_slots, d_model=self.rm_d_model, num_heads=self.rm_num_heads)
-        #gru = GRUModel(self.d_model, 768, self.num_layers)
         grusa = GRUModelSA(self.d_model, 768, self.num_layers)
-        #bert = TextNet(code_length=1536)
-        #lstm = ReviewLSTM(self.d_model, self.dropout, 768, self.num_layers, True)
-        #attn_lstm = ReviewLSTMSA(self.d_model, self.dropout, 1024, self.num_layers, True,100,10)
         model = Transformer(
             Encoder(EncoderLayer(self.d_model, c(attn), c(ff), self.dropout), self.num_layers),
             Decoder(
                 DecoderLayer(self.d_model, c(attn), c(attn), c(ff), self.dropout, self.rm_num_slots, self.rm_d_model),
                 self.num_layers),
             lambda x: x,
-            nn.Sequential(Embeddings(self.d_model, tgt_vocab), c(position)),
-            grusa, attn, ff)
+            nn.Sequential(Embeddings(self.d_model, tgt_vocab), c(position)), grusa, attn, ff)
         for p in model.parameters():
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
@@ -563,7 +524,6 @@ class EncoderDecoder(AttModel):
     def _prepare_feature(self, fc_feats, att_feats, att_masks):
 
         att_feats, seq, att_masks, seq_mask = self._prepare_feature_forward(att_feats, att_masks)
-        #memory = self.model.encode(att_feats, att_masks) 原来的
         memory = self.model.encode(att_feats, att_masks, seq, seq_mask)
 
         return fc_feats[..., :1], att_feats[..., :1], memory, att_masks
@@ -571,7 +531,7 @@ class EncoderDecoder(AttModel):
     def _prepare_feature_forward(self, att_feats, att_masks=None, seq=None):
         att_feats, att_masks = self.clip_att(att_feats, att_masks)
 
-        att_feats = pack_wrapper(self.att_embed, att_feats, att_masks) #将提取的特征进行了简单的线性运算
+        att_feats = pack_wrapper(self.att_embed, att_feats, att_masks)
 
         if att_masks is None:
             att_masks = att_feats.new_ones(att_feats.shape[:2], dtype=torch.long)
